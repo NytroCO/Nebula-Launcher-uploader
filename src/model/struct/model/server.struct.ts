@@ -32,6 +32,13 @@ export class ServerStructure extends BaseModelStructure<Server> {
         options: {
             forgeVersion?: string
             liteloaderVersion?: string
+            name?: string
+            description?: string
+            icon?: string
+            address?: string
+            version?: string
+            mainServer?: boolean
+            autoConnect?: boolean
         }
     ): Promise<void> {
         const effectiveId = `${id}-${minecraftVersion}`
@@ -54,7 +61,14 @@ export class ServerStructure extends BaseModelStructure<Server> {
             )
             await fms.init()
             const serverMeta: ServerMeta = {
-                forgeVersion: options.forgeVersion
+                forgeVersion: options.forgeVersion,
+                name: '',
+                description: '',
+                icon: '',
+                address: '',
+                version: '',
+                mainServer: false,
+                autoConnect : true
             }
             await writeFile(resolvePath(absoluteServerRoot, 'servermeta.json'), JSON.stringify(serverMeta, null, 2))
         }
@@ -139,19 +153,19 @@ export class ServerStructure extends BaseModelStructure<Server> {
 
                 accumulator.push({
                     id: match[1],
-                    name: '<FILL IN MANUALLY>',
-                    description: '<FILL IN MANUALLY>',
-                    icon: iconUrl,
-                    version: '1.0.0',
-                    address: '<FILL IN MANUALLY>',
+                    name: serverMeta.name,
+                    description: serverMeta.description,
+                    icon: serverMeta.icon,
+                    version: serverMeta.version,
+                    address: serverMeta.address,
                     minecraftVersion: match[2],
                     discord: {
                         shortId: '<FILL IN MANUALLY OR REMOVE>',
                         largeImageText: '<FILL IN MANUALLY OR REMOVE>',
                         largeImageKey: '<FILL IN MANUALLY OR REMOVE>'
                     },
-                    mainServer: false,
-                    autoconnect: false,
+                    mainServer: serverMeta.mainServer,
+                    autoconnect: serverMeta.autoConnect,
                     modules
                 })
 
