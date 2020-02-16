@@ -46,7 +46,8 @@ export class MiscFileStructure extends ModuleStructure {
         return name
     }
     protected async getModuleUrl(name: string, path: string, stats: Stats): Promise<string> {
-        return resolveURL(this.baseUrl, join(this.relativeRoot, name))
+        const fileLoc = path.split(this.relativeRoot)[1] // using this cheap fix to fix the recursive folder urls
+        return resolveURL(this.baseUrl, join(this.relativeRoot, fileLoc))
     }
     protected async getModulePath(name: string, path: string, stats: Stats): Promise<string | null> {
         return path.substr(this.containerDirectory.length+1).replace(/\\/g, '/')
