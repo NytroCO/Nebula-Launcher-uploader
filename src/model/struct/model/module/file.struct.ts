@@ -3,8 +3,8 @@ import { Stats } from 'fs'
 import { Type, Module } from 'helios-distribution-types'
 import { resolve as resolveURL } from 'url'
 import { ModuleStructure } from './module.struct'
-import { readdir, stat } from 'fs-extra'
-import { join, resolve } from 'path'
+import { readdir, stat} from 'fs-extra'
+import { join, resolve, sep } from 'path'
 
 export class MiscFileStructure extends ModuleStructure {
 
@@ -46,8 +46,7 @@ export class MiscFileStructure extends ModuleStructure {
         return name
     }
     protected async getModuleUrl(name: string, path: string, stats: Stats): Promise<string> {
-        const fileLoc = path.split(this.relativeRoot)[1] // using this cheap fix to fix the recursive folder urls
-        return resolveURL(this.baseUrl, join(this.relativeRoot, fileLoc))
+        return resolveURL(this.baseUrl, join(this.relativeRoot, ...path.substr(this.containerDirectory.length+1).split(sep)))
     }
     protected async getModulePath(name: string, path: string, stats: Stats): Promise<string | null> {
         return path.substr(this.containerDirectory.length+1).replace(/\\/g, '/')
