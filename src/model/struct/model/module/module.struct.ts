@@ -11,7 +11,8 @@ export abstract class ModuleStructure extends BaseModelStructure<Module> {
         relativeRoot: string,
         structRoot: string,
         baseUrl: string,
-        protected type: Type
+        protected type: Type,
+        protected filter?: ((name: string, path: string, stats: Stats) => boolean)
     ) {
         super(absoluteRoot, relativeRoot, structRoot, baseUrl)
     }
@@ -28,16 +29,16 @@ export abstract class ModuleStructure extends BaseModelStructure<Module> {
         return `generated.${this.type.toLowerCase()}:${name}:${version}@${TypeMetadata[this.type].defaultExtension}`
     }
 
-    protected async abstract getModuleId(name: string, path: string, stats: Stats, buf: Buffer): Promise<string>
-    protected async abstract getModuleName(name: string, path: string, stats: Stats, buf: Buffer): Promise<string>
+    protected async abstract getModuleId(name: string, path: string): Promise<string>
+    protected async abstract getModuleName(name: string, path: string): Promise<string>
     protected async abstract getModuleUrl(name: string, path: string, stats: Stats): Promise<string>
     protected async abstract getModulePath(name: string, path: string, stats: Stats): Promise<string | null>
 
     protected async parseModule(file: string, filePath: string, stats: Stats): Promise<Module> {
         const buf = await readFile(filePath)
         const mdl: Module = {
-            id: await this.getModuleId(file, filePath, stats, buf),
-            name: await this.getModuleName(file, filePath, stats, buf),
+            id: await this.getModuleId(file, filePath),
+            name: await this.getModuleName(file, filePath),
             type: this.type,
             required: {
                 value: false,
@@ -66,7 +67,10 @@ export abstract class ModuleStructure extends BaseModelStructure<Module> {
                 const filePath = resolve(this.containerDirectory, file)
                 const stats = await lstat(filePath)
                 if (stats.isFile()) {
-                    accumulator.push(await this.parseModule(file, filePath, stats))
+                    if(this.filter == null || this.filter(file, filePath, stats)) {
+                        accumulator.push(await this.parseModule(file, filePath, stats))
+                    }
+                    
                 }
             }
         }

@@ -1,4 +1,4 @@
-export interface VersionManifest113 {
+export interface VersionManifestFG3 {
 
     id: string
     time: string
@@ -6,7 +6,7 @@ export interface VersionManifest113 {
     type: string
     mainClass: string
     inheritsFrom: string
-    logging: {}
+    logging: Record<string, unknown>
     arguments: {
         game: string[]
     }

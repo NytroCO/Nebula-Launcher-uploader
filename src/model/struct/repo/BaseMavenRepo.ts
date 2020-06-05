@@ -4,8 +4,11 @@ import { dirname, join, resolve } from 'path'
 import { resolve as resolveURL } from 'url'
 import { MavenUtil } from '../../../util/maven'
 import { BaseFileStructure } from '../BaseFileStructure'
+import { LoggerUtil } from '../../../util/LoggerUtil'
 
 export abstract class BaseMavenRepo extends BaseFileStructure {
+
+    private static readonly logger = LoggerUtil.getLogger('BaseMavenRepo')
 
     constructor(
         absoluteRoot: string,
@@ -50,24 +53,52 @@ export abstract class BaseMavenRepo extends BaseFileStructure {
 
     private async downloadArtifactBase(url: string, relative: string): Promise<void> {
         const resolvedURL = resolveURL(url, relative).toString()
-        console.debug(`Downloading ${resolvedURL}..`)
+        return this.downloadArtifactDirect(resolvedURL, relative)
+    }
+
+    public async downloadArtifactDirect(url: string, path: string): Promise<void> {
+        BaseMavenRepo.logger.debug(`Downloading ${url}..`)
         const response = await axios({
             method: 'get',
-            url: resolvedURL,
+            url,
             responseType: 'stream'
         })
-        const localPath = resolve(this.containerDirectory, relative)
+        const localPath = resolve(this.containerDirectory, path)
         await mkdirs(dirname(localPath))
         const writer = createWriteStream(localPath)
         response.data.pipe(writer)
         // tslint:disable-next-line: no-shadowed-variable
         return new Promise((resolve, reject) => {
             writer.on('finish', () => {
-                console.debug(`Completed download of ${resolvedURL}.`)
+                BaseMavenRepo.logger.debug(`Completed download of ${url}.`)
                 resolve()
             })
             writer.on('error', reject)
         })
+    }
+
+    public async headArtifactById(url: string, mavenIdentifier: string, extension?: string): Promise<boolean> {
+        return this.headArtifactBase(url, MavenUtil.mavenIdentifierToString(mavenIdentifier, extension) as string)
+    }
+
+    public async headArtifactByComponents(
+        url: string, group: string, artifact: string, version: string, classifier?: string, extension?: string
+    ): Promise<boolean> {
+        return this.headArtifactBase(url,
+            MavenUtil.mavenComponentsToString(group, artifact, version, classifier, extension))
+    }
+
+    private async headArtifactBase(url: string, relative: string): Promise<boolean> {
+        const resolvedURL = resolveURL(url, relative).toString()
+        try {
+            const response = await axios({
+                method: 'head',
+                url: resolvedURL
+            })
+            return response.status === 200
+        } catch (ignored) {
+            return false
+        }
     }
 
 }

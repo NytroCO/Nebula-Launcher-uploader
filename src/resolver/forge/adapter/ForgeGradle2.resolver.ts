@@ -1,18 +1,26 @@
-import AdmZip from 'adm-zip'
 import { createHash } from 'crypto'
 import { copy, lstat, mkdirs, pathExists, readFile, remove } from 'fs-extra'
 import { Module, Type } from 'helios-distribution-types'
 import { basename, join } from 'path'
-import { VersionManifest17 } from '../../../model/forge/versionmanifest17'
+import { VersionManifestFG2 } from '../../../model/forge/VersionManifestFG2'
 import { LibRepoStructure } from '../../../model/struct/repo/librepo.struct'
 import { MavenUtil } from '../../../util/maven'
 import { PackXZExtractWrapper } from '../../../util/PackXZExtractWrapper'
 import { VersionUtil } from '../../../util/versionutil'
 import { ForgeResolver } from '../forge.resolver'
+import { MinecraftVersion } from '../../../util/MinecraftVersion'
+import { LoggerUtil } from '../../../util/LoggerUtil'
 
-export class Forge17Adapter extends ForgeResolver {
+type ArrayElement<A> = A extends readonly (infer T)[] ? T : never
 
-    public static isForVersion(version: string): boolean {
+export class ForgeGradle2Adapter extends ForgeResolver {
+
+    private static readonly logger = LoggerUtil.getLogger('FG2 Adapter')
+
+    public static isForVersion(version: MinecraftVersion, libraryVersion: string): boolean {
+        if(version.getMinor() === 12 && !VersionUtil.isOneDotTwelveFG2(libraryVersion)) {
+            return false
+        }
         return VersionUtil.isVersionAcceptable(version, [7, 8, 9, 10, 11, 12])
     }
 
@@ -20,7 +28,7 @@ export class Forge17Adapter extends ForgeResolver {
         absoluteRoot: string,
         relativeRoot: string,
         baseUrl: string,
-        minecraftVersion: string,
+        minecraftVersion: MinecraftVersion,
         forgeVersion: string
     ) {
         super(absoluteRoot, relativeRoot, baseUrl, minecraftVersion, forgeVersion)
@@ -30,44 +38,34 @@ export class Forge17Adapter extends ForgeResolver {
         return this.getForgeByVersion()
     }
 
-    public isForVersion(version: string): boolean {
-        return Forge17Adapter.isForVersion(version)
+    public isForVersion(version: MinecraftVersion, libraryVersion: string): boolean {
+        return ForgeGradle2Adapter.isForVersion(version, libraryVersion)
     }
 
     public async getForgeByVersion(): Promise<Module> {
         const libRepo = this.repoStructure.getLibRepoStruct()
         const targetLocalPath = libRepo.getLocalForge(this.artifactVersion, 'universal')
-        console.debug(`Checking for forge version at ${targetLocalPath}..`)
+        ForgeGradle2Adapter.logger.debug(`Checking for forge version at ${targetLocalPath}..`)
         if (!await libRepo.artifactExists(targetLocalPath)) {
-            console.debug('Forge not found locally, initializing download..')
+            ForgeGradle2Adapter.logger.debug('Forge not found locally, initializing download..')
             await libRepo.downloadArtifactByComponents(
                 this.REMOTE_REPOSITORY,
                 LibRepoStructure.FORGE_GROUP,
                 LibRepoStructure.FORGE_ARTIFACT,
                 this.artifactVersion, 'universal', 'jar')
         } else {
-            console.debug('Using locally discovered forge.')
+            ForgeGradle2Adapter.logger.debug('Using locally discovered forge.')
         }
-        console.debug(`Beginning processing of Forge v${this.forgeVersion} (Minecraft ${this.minecraftVersion})`)
+        ForgeGradle2Adapter.logger.debug(`Beginning processing of Forge v${this.forgeVersion} (Minecraft ${this.minecraftVersion})`)
 
-        const forgeUniversalBuffer = await readFile(targetLocalPath)
-        const zip = new AdmZip(forgeUniversalBuffer)
-        const zipEntries = zip.getEntries()
-
-        let versionManifest
-
-        for (const entry of zipEntries) {
-            if (entry.entryName === 'version.json') {
-                versionManifest = zip.readAsText(entry)
-                break
-            }
-        }
-
-        if (!versionManifest) {
+        let versionManifestBuf: Buffer
+        try {
+            versionManifestBuf = await this.getVersionManifestFromJar(targetLocalPath)
+        } catch(err) {
             throw new Error('Failed to find version.json in forge universal jar.')
         }
 
-        versionManifest = JSON.parse(versionManifest) as VersionManifest17
+        const versionManifest = JSON.parse(versionManifestBuf.toString()) as VersionManifestFG2
 
         const forgeModule: Module = {
             id: MavenUtil.mavenComponentsToIdentifier(
@@ -78,7 +76,7 @@ export class Forge17Adapter extends ForgeResolver {
             name: 'Minecraft Forge',
             type: Type.ForgeHosted,
             artifact: this.generateArtifact(
-                forgeUniversalBuffer,
+                await readFile(targetLocalPath),
                 await lstat(targetLocalPath),
                 libRepo.getArtifactUrlByComponents(
                     this.baseUrl,
@@ -97,10 +95,10 @@ export class Forge17Adapter extends ForgeResolver {
                 // We've already processed forge.
                 continue
             }
-            console.debug(`Processing ${lib.name}..`)
+            ForgeGradle2Adapter.logger.debug(`Processing ${lib.name}..`)
 
-            const extension = this.determineExtension(lib.checksums)
-            const localPath = libRepo.getArtifactById(lib.name, extension) as string
+            const extension = await this.determineExtension(lib, libRepo)
+            const localPath = libRepo.getArtifactById(lib.name, extension)
 
             const postProcess = extension === 'jar.pack.xz'
 
@@ -111,24 +109,24 @@ export class Forge17Adapter extends ForgeResolver {
                 libBuf = await readFile(localPath)
                 // VERIFY HASH
                 if (!postProcess) { // Checksums for .pack.xz in the version.json are completely useless.
-                    if (lib.checksums != null) {
+                    if (lib.checksums != null && lib.checksums.length == 1) {
                         const sha1 = createHash('sha1').update(libBuf).digest('hex')
                         if (sha1 !== lib.checksums[0]) {
-                            console.debug('Hashes do not match, redownloading..')
+                            ForgeGradle2Adapter.logger.debug('Hashes do not match, redownloading..')
                             queueDownload = true
                         }
                     }
                 }
             } else {
-                console.debug('Not found locally, downloading..')
+                ForgeGradle2Adapter.logger.debug('Not found locally, downloading..')
                 queueDownload = true
             }
 
             if (queueDownload) {
-                await libRepo.downloadArtifactById(lib.url || 'https://libraries.minecraft.net/', lib.name, extension)
+                await libRepo.downloadArtifactById(lib.url || this.MOJANG_REMOTE_REPOSITORY, lib.name, extension)
                 libBuf = await readFile(localPath)
             } else {
-                console.debug('Using local copy.')
+                ForgeGradle2Adapter.logger.debug('Using local copy.')
             }
 
             const stats = await lstat(localPath)
@@ -168,20 +166,48 @@ export class Forge17Adapter extends ForgeResolver {
             if (el != null) {
                 el.artifact.MD5 = entry.MD5
             } else {
-                console.error(`Error during post processing, could not update ${entry.id}`)
+                ForgeGradle2Adapter.logger.error(`Error during post processing, could not update ${entry.id}`)
             }
         }
 
         return forgeModule
     }
 
-    private determineExtension(checksums: string[] | undefined): string {
-        return checksums != null && checksums.length > 1 ? 'jar.pack.xz' : 'jar'
+    private async determineExtension(lib: ArrayElement<VersionManifestFG2['libraries']>, libRepo: LibRepoStructure): Promise<string> {
+        if(lib.url == null) {
+            return 'jar'
+        }
+        ForgeGradle2Adapter.logger.debug('Determing extension..')
+        const possibleExt = [
+            'jar.pack.xz',
+            'jar'
+        ]
+        // Check locally.
+        for(const ext of possibleExt) {
+            const localPath = libRepo.getArtifactById(lib.name, ext)
+            const exists = await libRepo.artifactExists(localPath)
+            if(exists) {
+                return ext
+            }
+        }
+        // Check remote.
+        for(const ext of possibleExt) {
+            const exists = await libRepo.headArtifactById(this.REMOTE_REPOSITORY, lib.name, ext)
+            if(exists) {
+                return ext
+            }
+        }
+        // Default to jar.
+        return 'jar'
     }
 
     private async processPackXZFiles(
         processingQueue: Array<{id: string, localPath: string}>
     ): Promise<Array<{id: string, MD5: string}>> {
+
+        if(processingQueue.length == 0) {
+            return []
+        }
 
         const accumulator = []
 
@@ -200,9 +226,9 @@ export class Forge17Adapter extends ForgeResolver {
             files.push(tmpFile)
         }
 
-        console.debug('Spawning PackXZExtract.')
+        ForgeGradle2Adapter.logger.debug('Spawning PackXZExtract.')
         await PackXZExtractWrapper.extractUnpack(files)
-        console.debug('All files extracted, calculating hashes..')
+        ForgeGradle2Adapter.logger.debug('All files extracted, calculating hashes..')
 
         for (const entry of processingQueue) {
             const tmpFileName = basename(entry.localPath)
@@ -214,7 +240,7 @@ export class Forge17Adapter extends ForgeResolver {
             })
         }
 
-        console.debug('Complete, removing temp directory..')
+        ForgeGradle2Adapter.logger.debug('Complete, removing temp directory..')
 
         await remove(tempDir)
 

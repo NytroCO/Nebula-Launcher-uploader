@@ -1,14 +1,19 @@
 import { lstat, mkdirs, pathExists, readdir, readFile, writeFile } from 'fs-extra'
-import { Server } from 'helios-distribution-types'
+import { Server, Module } from 'helios-distribution-types'
 import { dirname, join, resolve as resolvePath } from 'path'
 import { resolve as resolveUrl } from 'url'
 import { VersionSegmentedRegistry } from '../../../util/VersionSegmentedRegistry'
-import { ServerMeta } from '../../nebula/servermeta'
+import { ServerMeta, getDefaultServerMeta, ServerMetaOptions } from '../../nebula/servermeta'
 import { BaseModelStructure } from './basemodel.struct'
 import { MiscFileStructure } from './module/file.struct'
 import { LiteModStructure } from './module/litemod.struct'
+import { LibraryStructure } from './module/library.struct'
+import { MinecraftVersion } from '../../../util/MinecraftVersion'
+import { LoggerUtil } from '../../../util/LoggerUtil'
 
 export class ServerStructure extends BaseModelStructure<Server> {
+
+    private static readonly logger = LoggerUtil.getLogger('ServerStructure')
 
     private readonly ID_REGEX = /(.+-(.+)$)/
 
@@ -28,7 +33,7 @@ export class ServerStructure extends BaseModelStructure<Server> {
 
     public async createServer(
         id: string,
-        minecraftVersion: string,
+        minecraftVersion: MinecraftVersion,
         options: {
             forgeVersion?: string
             liteloaderVersion?: string
@@ -46,37 +51,37 @@ export class ServerStructure extends BaseModelStructure<Server> {
         const relativeServerRoot = join(this.relativeRoot, effectiveId)
 
         if (await pathExists(absoluteServerRoot)) {
-            console.error('Server already exists! Aborting.')
+            ServerStructure.logger.error('Server already exists! Aborting.')
             return
         }
 
         await mkdirs(absoluteServerRoot)
 
+        const serverMetaOpts: ServerMetaOptions = {}
+
         if (options.forgeVersion != null) {
             const fms = VersionSegmentedRegistry.getForgeModStruct(
                 minecraftVersion,
+                options.forgeVersion,
                 absoluteServerRoot,
                 relativeServerRoot,
                 this.baseUrl
             )
             await fms.init()
-            const serverMeta: ServerMeta = {
-                forgeVersion: options.forgeVersion,
-                name: '',
-                description: '',
-                icon: '',
-                address: '',
-                version: '',
-                mainServer: false,
-                autoConnect : true
-            }
-            await writeFile(resolvePath(absoluteServerRoot, 'servermeta.json'), JSON.stringify(serverMeta, null, 2))
+            serverMetaOpts.forgeVersion = options.forgeVersion
         }
 
         if (options.liteloaderVersion != null) {
             const lms = new LiteModStructure(absoluteServerRoot, relativeServerRoot, this.baseUrl)
             await lms.init()
+            serverMetaOpts.liteloaderVersion = options.liteloaderVersion
         }
+
+        const serverMeta: ServerMeta = getDefaultServerMeta(id, minecraftVersion.toString(), serverMetaOpts)
+        await writeFile(resolvePath(absoluteServerRoot, 'servermeta.json'), JSON.stringify(serverMeta, null, 2))
+
+        const libS = new LibraryStructure(absoluteServerRoot, relativeServerRoot, this.baseUrl)
+        await libS.init()
 
         const mfs = new MiscFileStructure(absoluteServerRoot, relativeServerRoot, this.baseUrl)
         await mfs.init()
@@ -94,12 +99,12 @@ export class ServerStructure extends BaseModelStructure<Server> {
 
                 const match = this.ID_REGEX.exec(file)
                 if (match == null) {
-                    console.warn(`Server directory ${file} does not match the defined standard.`)
-                    console.warn('All server ids must end with -<minecraft version> (ex. -1.12.2)')
+                    ServerStructure.logger.warn(`Server directory ${file} does not match the defined standard.`)
+                    ServerStructure.logger.warn('All server ids must end with -<minecraft version> (ex. -1.12.2)')
                     continue
                 }
 
-                let iconUrl
+                let iconUrl: string = null!
 
                 // Resolve server icon
                 const subFiles = await readdir(absoluteServerRoot)
@@ -111,66 +116,71 @@ export class ServerStructure extends BaseModelStructure<Server> {
                 }
 
                 if (!iconUrl) {
-                    console.warn(`No icon file found for server ${file}.`)
-                    iconUrl = '<FILL IN MANUALLY>'
+                    ServerStructure.logger.warn(`No icon file found for server ${file}.`)
                 }
 
                 // Read server meta
                 const serverMeta: ServerMeta = JSON.parse(await readFile(resolvePath(absoluteServerRoot, 'servermeta.json'), 'utf-8'))
-                const minecraftVersion = match[2]
+                const minecraftVersion = new MinecraftVersion(match[2])
 
-                const forgeResolver = VersionSegmentedRegistry.getForgeResolver(
-                    minecraftVersion,
-                    serverMeta.forgeVersion,
-                    dirname(this.containerDirectory),
-                    '',
-                    this.baseUrl
-                )
+                const modules: Module[] = []
 
-                // Resolve forge
-                const forgeItselfModule = await forgeResolver.getModule()
+                if(serverMeta.forge) {
+                    const forgeResolver = VersionSegmentedRegistry.getForgeResolver(
+                        minecraftVersion,
+                        serverMeta.forge.version,
+                        dirname(this.containerDirectory),
+                        '',
+                        this.baseUrl
+                    )
 
-                const forgeModStruct = VersionSegmentedRegistry.getForgeModStruct(
-                    minecraftVersion,
-                    absoluteServerRoot,
-                    relativeServerRoot,
-                    this.baseUrl
-                )
-                const forgeModModules = await forgeModStruct.getSpecModel()
+                    // Resolve forge
+                    const forgeItselfModule = await forgeResolver.getModule()
+                    modules.push(forgeItselfModule)
 
-                const liteModStruct = new LiteModStructure(absoluteServerRoot, relativeServerRoot, this.baseUrl)
-                const liteModModules = await liteModStruct.getSpecModel()
+                    const forgeModStruct = VersionSegmentedRegistry.getForgeModStruct(
+                        minecraftVersion,
+                        serverMeta.forge.version,
+                        absoluteServerRoot,
+                        relativeServerRoot,
+                        this.baseUrl
+                    )
+
+                    const forgeModModules = await forgeModStruct.getSpecModel()
+                    modules.push(...forgeModModules)
+                }
+
+                
+                if(serverMeta.liteloader) {
+                    const liteModStruct = new LiteModStructure(absoluteServerRoot, relativeServerRoot, this.baseUrl)
+                    const liteModModules = await liteModStruct.getSpecModel()
+                    modules.push(...liteModModules)
+                }
+                
+                const libraryStruct = new LibraryStructure(absoluteServerRoot, relativeServerRoot, this.baseUrl)
+                const libraryModules = await libraryStruct.getSpecModel()
+                modules.push(...libraryModules)
 
                 const fileStruct = new MiscFileStructure(absoluteServerRoot, relativeServerRoot, this.baseUrl)
                 const fileModules = await fileStruct.getSpecModel()
-
-                const modules = [
-                    forgeItselfModule,
-                    ...forgeModModules,
-                    ...liteModModules,
-                    ...fileModules
-                ]
+                modules.push(...fileModules)
 
                 accumulator.push({
                     id: match[1],
-                    name: serverMeta.name,
-                    description: serverMeta.description,
-                    icon: serverMeta.icon,
-                    version: serverMeta.version,
-                    address: serverMeta.address,
+                    name: serverMeta.meta.name,
+                    description: serverMeta.meta.description,
+                    icon: iconUrl,
+                    version: serverMeta.meta.version,
+                    address: serverMeta.meta.address,
                     minecraftVersion: match[2],
-                    discord: {
-                        shortId: '<FILL IN MANUALLY OR REMOVE>',
-                        largeImageText: '<FILL IN MANUALLY OR REMOVE>',
-                        largeImageKey: '<FILL IN MANUALLY OR REMOVE>'
-                    },
-                    mainServer: serverMeta.mainServer,
-                    autoconnect: serverMeta.autoConnect,
+                    ...(serverMeta.meta.discord ? {discord: serverMeta.meta.discord} : {}),
+                    mainServer: serverMeta.meta.mainServer,
+                    autoconnect: serverMeta.meta.autoconnect,
                     modules
                 })
 
             } else {
-                console.warn(`Path ${file} in server directory is not a directory!`)
+                ServerStructure.logger.warn(`Path ${file} in server directory is not a directory!`)
             }
         }
         return accumulator

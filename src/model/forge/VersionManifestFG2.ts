@@ -1,4 +1,4 @@
-export interface VersionManifest17 {
+export interface VersionManifestFG2 {
 
     id: string
     time: string
@@ -8,7 +8,7 @@ export interface VersionManifest17 {
     mainClass: string
     inheritsFrom: string
     jar: string
-    logging: {}
+    logging: Record<string, unknown>
     libraries: Array<{
         name: string
         url?: string

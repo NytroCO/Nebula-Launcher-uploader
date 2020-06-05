@@ -1,11 +1,14 @@
+import StreamZip from 'node-stream-zip'
 import { createHash } from 'crypto'
 import { Stats } from 'fs-extra'
 import { Artifact } from 'helios-distribution-types'
 import { RepoStructure } from '../../model/struct/repo/repo.struct'
 import { BaseResolver } from '../baseresolver'
+import { MinecraftVersion } from '../../util/MinecraftVersion'
 
 export abstract class ForgeResolver extends BaseResolver {
 
+    protected readonly MOJANG_REMOTE_REPOSITORY = 'https://libraries.minecraft.net/'
     protected readonly REMOTE_REPOSITORY = 'https://files.minecraftforge.net/maven/'
 
     protected repoStructure: RepoStructure
@@ -15,7 +18,7 @@ export abstract class ForgeResolver extends BaseResolver {
         absoluteRoot: string,
         relativeRoot: string,
         baseUrl: string,
-        protected minecraftVersion: string,
+        protected minecraftVersion: MinecraftVersion,
         protected forgeVersion: string
     ) {
         super(absoluteRoot, relativeRoot, baseUrl)
@@ -77,6 +80,26 @@ export abstract class ForgeResolver extends BaseResolver {
             MD5: createHash('md5').update(buf).digest('hex'),
             url
         }
+    }
+
+    protected async getVersionManifestFromJar(jarPath: string): Promise<Buffer>{
+        return new Promise((resolve, reject) => {
+            const zip = new StreamZip({
+                file: jarPath,
+                storeEntries: true
+            })
+            zip.on('ready', () => {
+                try {
+                    const data = zip.entryDataSync('version.json')
+                    zip.close()
+                    resolve(data)
+                } catch(err) {
+                    reject(err)
+                }
+                
+            })
+            zip.on('error', err => reject(err))
+        })
     }
 
 }
