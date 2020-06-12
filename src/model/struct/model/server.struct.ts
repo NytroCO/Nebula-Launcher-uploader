@@ -16,6 +16,7 @@ export class ServerStructure extends BaseModelStructure<Server> {
     private static readonly logger = LoggerUtil.getLogger('ServerStructure')
 
     private readonly ID_REGEX = /(.+-(.+)$)/
+    private readonly SERVER_META_FILE = 'servermeta.json'
 
     constructor(
         absoluteRoot: string,
@@ -78,7 +79,7 @@ export class ServerStructure extends BaseModelStructure<Server> {
         }
 
         const serverMeta: ServerMeta = getDefaultServerMeta(id, minecraftVersion.toString(), serverMetaOpts)
-        await writeFile(resolvePath(absoluteServerRoot, 'servermeta.json'), JSON.stringify(serverMeta, null, 2))
+        await writeFile(resolvePath(absoluteServerRoot, this.SERVER_META_FILE), JSON.stringify(serverMeta, null, 2))
 
         const libS = new LibraryStructure(absoluteServerRoot, relativeServerRoot, this.baseUrl)
         await libS.init()
@@ -120,7 +121,7 @@ export class ServerStructure extends BaseModelStructure<Server> {
                 }
 
                 // Read server meta
-                const serverMeta: ServerMeta = JSON.parse(await readFile(resolvePath(absoluteServerRoot, 'servermeta.json'), 'utf-8'))
+                const serverMeta: ServerMeta = JSON.parse(await readFile(resolvePath(absoluteServerRoot, this.SERVER_META_FILE), 'utf-8'))
                 const minecraftVersion = new MinecraftVersion(match[2])
 
                 const modules: Module[] = []
