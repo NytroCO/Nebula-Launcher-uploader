@@ -112,8 +112,8 @@ export class ForgeModStructure17 extends BaseForgeModStructure {
                     this.forgeModMetadata[name] = (resolved as McModInfo[])[0]
                 }
                 // No way to resolve this AFAIK
-                if(this.forgeModMetadata[name]!.version.indexOf('@') > -1 || this.forgeModMetadata[name]!.version.indexOf('$') > -1) {
-                    // Ex. @VERSION@, ${version}
+                if(this.forgeModMetadata[name]!.version.indexOf('@') > -1 || this.forgeModMetadata[name]!.version.indexOf('$') > -1 || this.forgeModMetadata[name]!.version.includes('SNAPSHOT')) {
+                    // Ex. @VERSION@, ${version}, -SNAPSHOT
                     this.forgeModMetadata[name]!.version = '0.0.0'
                 }
             } catch (err) {
