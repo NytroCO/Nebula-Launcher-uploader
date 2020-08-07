@@ -131,14 +131,17 @@ export class ForgeModStructure17 extends BaseForgeModStructure {
 
             // Ex. @VERSION@, ${version}
             if(this.forgeModMetadata[name]!.version != null) {
-                const isVersionWildcard = this.forgeModMetadata[name]!.version.indexOf('@') > -1 || this.forgeModMetadata[name]!.version.indexOf('$') > -1 || this.forgeModMetadata[name]!.version.includes('SNAPSHOT')
+                const isVersionWildcard = this.forgeModMetadata[name]!.version.indexOf('@') > -1 || this.forgeModMetadata[name]!.version.indexOf('$') > -1
                 if(isVersionWildcard) {
                     x.version = crudeInference.version
                 }
             } else {
                 x.version = crudeInference.version
             }
-            
+
+            if (x.version.includes('-SNAPSHOT')){
+                x.version = x.version.replace('-SNAPSHOT', '')
+            }
             
         } else {
             this.forgeModMetadata[name] = ({
