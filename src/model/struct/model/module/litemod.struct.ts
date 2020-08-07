@@ -5,34 +5,47 @@ import { join } from 'path'
 import { resolve } from 'url'
 import { capitalize } from '../../../../util/stringutils'
 import { LiteMod } from '../../../liteloader/litemod'
-import { ModuleStructure } from './module.struct'
+import { ToggleableModuleStructure } from './toggleablemodule.struct'
+import { MinecraftVersion } from '../../../../util/MinecraftVersion'
+import { LibraryType } from '../../../claritas/ClaritasLibraryType'
+import { MetadataUtil } from '../../../../util/MetadataUtil'
 
-export class LiteModStructure extends ModuleStructure {
+export class LiteModStructure extends ToggleableModuleStructure {
 
     private liteModMetadata: {[property: string]: LiteMod | undefined} = {}
 
     constructor(
         absoluteRoot: string,
         relativeRoot: string,
-        baseUrl: string
+        baseUrl: string,
+        minecraftVersion: MinecraftVersion
     ) {
-        super(absoluteRoot, relativeRoot, 'litemods', baseUrl, Type.LiteMod)
+        super(absoluteRoot, relativeRoot, 'litemods', baseUrl, minecraftVersion, Type.LiteMod)
+    }
+
+    public getLoggerName(): string {
+        return 'LiteModStructure'
     }
 
     protected async getModuleId(name: string, path: string): Promise<string> {
         const liteModData = await this.getLiteModMetadata(name, path)
-        return this.generateMavenIdentifier(liteModData.name, `${liteModData.version}-${liteModData.mcversion}`)
+        return this.generateMavenIdentifier(
+            MetadataUtil.completeGroupInference(this.getClaritasGroup(path), liteModData.name), liteModData.name, `${liteModData.version}-${liteModData.mcversion}`)
     }
     protected async getModuleName(name: string, path: string): Promise<string> {
         return capitalize((await this.getLiteModMetadata(name, path)).name)
     }
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     protected async getModuleUrl(name: string, path: string, stats: Stats): Promise<string> {
-        return resolve(this.baseUrl, join(this.relativeRoot, name))
+        return resolve(this.baseUrl, join(this.relativeRoot, this.getActiveNamespace(), name))
     }
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     protected async getModulePath(name: string, path: string, stats: Stats): Promise<string | null> {
         return null
+    }
+
+    protected getClaritasType(): LibraryType {
+        return LibraryType.LITELOADER
     }
 
     private getLiteModMetadata(name: string, path: string): Promise<LiteMod> {
