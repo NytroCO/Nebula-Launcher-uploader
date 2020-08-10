@@ -113,7 +113,11 @@ export class ServerStructure extends BaseModelStructure<Server> {
                 for (const subFile of subFiles) {
                     const caseInsensitive = subFile.toLowerCase()
                     if (caseInsensitive.endsWith('.jpg') || caseInsensitive.endsWith('.png')) {
-                        iconUrl = resolveUrl(this.baseUrl, join(relativeServerRoot, subFile))
+                        let extension = ''
+                        if(this.baseUrl.includes('gitlab')){
+                            extension = '?job=build'
+                        }
+                        iconUrl = resolveUrl(this.baseUrl, join(relativeServerRoot, subFile) + extension)
                     }
                 }
 
