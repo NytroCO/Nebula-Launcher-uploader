@@ -92,6 +92,10 @@ export abstract class ModuleStructure extends BaseModelStructure<Module> {
             id: await this.getModuleId(file, filePath),
             name: await this.getModuleName(file, filePath),
             type: this.type,
+            required: {
+                value: true,
+                def: true
+            },
             artifact: {
                 size: stats.size,
                 MD5: createHash('md5').update(buf).digest('hex'),
@@ -111,7 +115,7 @@ export abstract class ModuleStructure extends BaseModelStructure<Module> {
 
         if (await pathExists(scanDirectory)) {
             const files = await readdir(scanDirectory)
-            for (const file of files) {
+            for (const file of files.sort(((a, b) => a.localeCompare(b, undefined, {sensitivity: 'base'})))) {
                 const filePath = resolve(scanDirectory, file)
                 const stats = await lstat(filePath)
                 if (stats.isFile()) {
@@ -162,12 +166,12 @@ export abstract class ModuleStructure extends BaseModelStructure<Module> {
     }): Promise<Module[]> {
 
         const accumulator: Module[] = []
-        
+
         if(moduleCandidates.length > 0) {
 
             // Invoke Claritas and attach result to class.
             await this.invokeClaritas(moduleCandidates)
-    
+
             // Process Modules
             for(const candidate of moduleCandidates) {
                 options?.preProcess?.(candidate)
@@ -177,7 +181,7 @@ export abstract class ModuleStructure extends BaseModelStructure<Module> {
             }
 
         }
-        
+
         return accumulator
 
     }
