@@ -143,9 +143,9 @@ export class ForgeModStructure17 extends BaseForgeModStructure {
                 x.name = this.discernResult(claritasName, crudeInference.name)
             }
 
-            // Ex. @VERSION@, ${version}
+            // Ex. @VERSION@, ${version}, ''
             if(this.forgeModMetadata[name]!.version != null) {
-                const isVersionWildcard = this.forgeModMetadata[name]!.version.indexOf('@') > -1 || this.forgeModMetadata[name]!.version.indexOf('$') > -1 || !this.forgeModMetadata[name]!.version.length
+                const isVersionWildcard = this.forgeModMetadata[name]!.version.indexOf('@') > -1 || this.forgeModMetadata[name]!.version.indexOf('$') > -1 || this.forgeModMetadata[name]!.version === ''
                 if(isVersionWildcard) {
                     x.version = this.discernResult(claritasVersion, crudeInference.version)
                 }
@@ -153,6 +153,9 @@ export class ForgeModStructure17 extends BaseForgeModStructure {
                 x.version = this.discernResult(claritasVersion, crudeInference.version)
             }
 
+            if (x.version.includes('-SNAPSHOT')){
+                x.version = x.version.replace('-SNAPSHOT', '')
+            }
 
         } else {
             this.forgeModMetadata[name] = ({
