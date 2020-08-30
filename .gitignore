@@ -89,3 +89,13 @@ typings/
 
 # DynamoDB Local files
 .dynamodb/
+
+/node_modules/
+/.vs/
+/.vscode/
+/target/
+/logs/
+/dist/
+/.idea/
+.DS_Store
+.env

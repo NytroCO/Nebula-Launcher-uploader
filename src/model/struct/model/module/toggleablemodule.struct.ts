@@ -60,8 +60,11 @@ export abstract class ToggleableModuleStructure extends ModuleStructure {
             this.activeNamespace = undefined
 
         }
-
-        return this.resolvedModels
+        return this.resolvedModels.sort((a, b) => {
+            const aFileName = a.artifact.url.substring(a.artifact.url.lastIndexOf('/')+1)
+            const bFileName = b.artifact.url.substring(b.artifact.url.lastIndexOf('/')+1)
+            return aFileName.localeCompare(bFileName)
+        })
     }
     
     protected getActiveNamespace(): string {

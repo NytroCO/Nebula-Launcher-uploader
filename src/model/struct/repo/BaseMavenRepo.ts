@@ -32,6 +32,9 @@ export abstract class BaseMavenRepo extends BaseFileStructure {
     public getArtifactUrlByComponents(
         baseURL: string, group: string, artifact: string, version: string, classifier?: string, extension = 'jar'
     ): string {
+        if(baseURL.includes('gitlab')){
+            extension = extension.concat('?job=build')
+        }
         return resolveURL(baseURL, join(this.relativeRoot,
             MavenUtil.mavenComponentsToString(group, artifact, version, classifier, extension)))
     }

@@ -92,6 +92,10 @@ export abstract class ModuleStructure extends BaseModelStructure<Module> {
             id: await this.getModuleId(file, filePath),
             name: await this.getModuleName(file, filePath),
             type: this.type,
+            required: {
+                value: true,
+                def: true
+            },
             artifact: {
                 size: stats.size,
                 MD5: createHash('md5').update(buf).digest('hex'),

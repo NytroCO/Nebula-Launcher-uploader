@@ -37,6 +37,9 @@ export class LiteModStructure extends ToggleableModuleStructure {
     }
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     protected async getModuleUrl(name: string, path: string, stats: Stats): Promise<string> {
+        if(this.baseUrl.includes('gitlab')){
+            name = name.concat('?job=build')
+        }
         return resolve(this.baseUrl, join(this.relativeRoot, this.getActiveNamespace(), name))
     }
     // eslint-disable-next-line @typescript-eslint/no-unused-vars

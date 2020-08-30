@@ -19,6 +19,7 @@ export function getDefaultServerMeta(id: string, version: string, options?: Serv
                 largeImageKey: '<FILL IN OR REMOVE DISCORD OBJECT>'
             },
             mainServer: false,
+            serverCode: '',
             autoconnect: false
         }
     }
@@ -49,6 +50,7 @@ export interface ServerMeta {
         address: Server['address']
         discord?: Server['discord']
         mainServer: Server['mainServer']
+        serverCode: ''
         autoconnect: Server['autoconnect']
     }
 
