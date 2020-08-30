@@ -136,7 +136,7 @@ export class ForgeModStructure17 extends BaseForgeModStructure {
         // Validate
         const crudeInference = this.attemptCrudeInference(name)
         if(this.forgeModMetadata[name] != null) {
-            
+
             const x = this.forgeModMetadata[name]!
             if(x.modid == null || x.modid === '' || x.modid === this.EXAMPLE_MOD_ID) {
                 x.modid = this.discernResult(claritasId, crudeInference.name.toLowerCase())
@@ -145,15 +145,15 @@ export class ForgeModStructure17 extends BaseForgeModStructure {
 
             // Ex. @VERSION@, ${version}
             if(this.forgeModMetadata[name]!.version != null) {
-                const isVersionWildcard = this.forgeModMetadata[name]!.version.indexOf('@') > -1 || this.forgeModMetadata[name]!.version.indexOf('$') > -1
+                const isVersionWildcard = this.forgeModMetadata[name]!.version.indexOf('@') > -1 || this.forgeModMetadata[name]!.version.indexOf('$') > -1 || !this.forgeModMetadata[name]!.version.length
                 if(isVersionWildcard) {
                     x.version = this.discernResult(claritasVersion, crudeInference.version)
                 }
             } else {
                 x.version = this.discernResult(claritasVersion, crudeInference.version)
             }
-            
-            
+
+
         } else {
             this.forgeModMetadata[name] = ({
                 modid: this.discernResult(claritasId, crudeInference.name.toLowerCase()),
