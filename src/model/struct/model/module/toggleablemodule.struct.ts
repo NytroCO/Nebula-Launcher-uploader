@@ -17,7 +17,7 @@ export interface ToggleableModuleCandidate extends ModuleCandidate {
 }
 
 export abstract class ToggleableModuleStructure extends ModuleStructure {
-    
+
     private activeNamespace: string | undefined
 
     constructor(
@@ -61,9 +61,13 @@ export abstract class ToggleableModuleStructure extends ModuleStructure {
 
         }
 
-        return this.resolvedModels
+        return this.resolvedModels.sort((a, b) => {
+            const aFileName = a.artifact.url.substring(a.artifact.url.lastIndexOf('/')+1)
+            const bFileName = b.artifact.url.substring(b.artifact.url.lastIndexOf('/')+1)
+            return aFileName.localeCompare(bFileName)
+        })
     }
-    
+
     protected getActiveNamespace(): string {
         return this.activeNamespace || ''
     }
